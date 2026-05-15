@@ -100,11 +100,6 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
   function showToast(msg: string, isError = false) {
     setToast(msg); setToastError(isError)
     setTimeout(() => setToast(''), 3000)
@@ -600,7 +595,6 @@ export default function Dashboard() {
         </div>
         <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
           <button onClick={() => setShowUploadModal(true)} style={{ width: '100%', padding: '9px 12px', background: S.gold, color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, cursor: 'pointer' }}>Upload PDF</button>
-          <button onClick={handleSignOut} style={{ width: '100%', padding: '9px 12px', background: 'transparent', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, cursor: 'pointer' }}>Sign out</button>
         </div>
       </div>
 
