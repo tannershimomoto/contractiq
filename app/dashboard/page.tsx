@@ -171,7 +171,7 @@ async function savePlayer() {
       if (error) return showToast(error.message, true)
       showToast('Player updated')
     } else {
-      const { error } = await supabase.from('players').insert({ ...payload, user_id: '00000000-0000-0000-0000-000000000000' })
+      const { error } = await supabase.from('players').insert({ ...payload })
       if (error) return showToast(error.message, true)
       showToast('Player added')
     }
@@ -226,7 +226,6 @@ async function savePlayer() {
           showToast(`Updated: ${parsed.name}`)
         } else {
           const { error } = await supabase.from('players').insert({
-            user_id: '00000000-0000-0000-0000-000000000000',
             name: parsed.name, club: parsed.club || '',
             position: parsed.position || 'GK',
             contract_type: parsed.contractType || 'Guaranteed',
