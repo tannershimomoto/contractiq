@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --green: #1e3a2f;
+  --green-mid: #2d5240;
+  --green-light: #4a7c62;
+  --cream: #f5f2ec;
+  --cream-dark: #ede9e0;
+  --gold: #b8962e;
+  --text: #1a1a18;
+  --muted: #5a6e63;
+  --border: #c8d4cc;
+  --sprint: #7a3a1e;
+}
+
+body {
+  font-family: 'Barlow', sans-serif;
+  background: #f5f2ec;
+  color: #1a1a18;
+}
