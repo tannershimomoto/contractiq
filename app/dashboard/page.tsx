@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 type Salaries = Record<string, number>
+type Options = Record<string, boolean>
 type Player = {
   id: string
   name: string
@@ -22,6 +23,7 @@ type Player = {
   contract_notes: string
   salaries: Salaries
   monthlies: Salaries
+  options: Options
 }
 
 function fmt(n: number | undefined) {
@@ -94,7 +96,6 @@ export default function Dashboard() {
   const [parseStatus, setParseStatus] = useState('')
   const [parseProgress, setParseProgress] = useState(0)
   const [form, setForm] = useState<any>({})
-  const router = useRouter()
 
   useEffect(() => { loadPlayers() }, [])
 
@@ -142,9 +143,11 @@ export default function Dashboard() {
     }
     const sal = p.salaries || {}
     const mon = p.monthlies || {}
+    const opt = p.options || {}
     ;['2026', '2027s', '2027r', '2028', '2029', '2030'].forEach(k => {
       f[`sal_${k}`] = sal[k] ? '$' + Number(sal[k]).toLocaleString('en-US') : ''
       f[`mon_${k}`] = mon[k] ? '$' + Number(mon[k]).toLocaleString('en-US') : ''
+      f[`opt_${k}`] = !!opt[k]
     })
     setForm(f)
     setActiveTab('info')
@@ -155,11 +158,13 @@ export default function Dashboard() {
     if (!form.name?.trim()) return showToast('Player name required', true)
     const salaries: Salaries = {}
     const monthlies: Salaries = {}
+    const options: Options = {}
     ;['2026', '2027s', '2027r', '2028', '2029', '2030'].forEach(k => {
       const a = parseSal(form[`sal_${k}`] || '')
       const m = parseSal(form[`mon_${k}`] || '')
       if (a) salaries[k] = a
       if (m) monthlies[k] = m
+      if (form[`opt_${k}`]) options[k] = true
     })
     const payload = {
       name: form.name.trim(), club: form.club?.trim() || '',
@@ -170,7 +175,7 @@ export default function Dashboard() {
       active_date: form.activeDate || '', guarantee_end: form.guaranteeEnd || '',
       opt1_end: form.opt1End || '', opt2_end: form.opt2End || '',
       contract_notes: form.contractNotes?.trim() || '',
-      salaries, monthlies,
+      salaries, monthlies, options,
     }
     if (editingPlayer) {
       const { error } = await supabase.from('players').update(payload).eq('id', editingPlayer.id)
@@ -238,7 +243,7 @@ export default function Dashboard() {
             structure: parsed.structure || '',
             active_date: parsed.activeDate || '',
             guarantee_end: parsed.guaranteeEnd || '',
-            salaries, monthlies,
+            salaries, monthlies, options: {},
             nationality: '', dob: '', notes: '',
             opt1_end: '', opt2_end: '', contract_notes: '',
           })
@@ -260,8 +265,7 @@ export default function Dashboard() {
       }
     }
     reader.readAsDataURL(file)
-  }
-function renderStats() {
+  }function renderStats() {
     const f = getFiltered()
     const total = f.reduce((s, p) => s + getSal(p, period), 0)
     const avg = f.length ? Math.round(total / f.length) : 0
@@ -312,8 +316,9 @@ function renderStats() {
                   const s = getSal(p, period)
                   const hasSplit = p.salaries?.['2027r'] && p.salaries['2027r'] !== p.salaries['2027s']
                   const allKeys = Object.keys(p.salaries || {}).filter(k => (p.salaries || {})[k] > 0)
-                  const keyOrder = ['2026','2027s','2027r','2028','2029','2030']
-                  const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))).sort((a,b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
+                  const keyOrder = ['2026', '2027s', '2027r', '2028', '2029', '2030']
+                  const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))).sort((a, b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
+                  const opts = p.options || {}
                   return (
                     <tr key={p.id}>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>
@@ -325,9 +330,17 @@ function renderStats() {
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontSize: '11px' }}>{p.contract_type || '—'}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600, color: isSplit ? S.sprint : S.green, background: isSplit ? '#fdf7f4' : '' }}>{fmt(s)}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>
-                        {dispKeys.map(k => (
-                          <span key={k} style={{ display: 'inline-flex', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, background: k === '2026' ? S.green : S.creamDark, color: k === '2026' ? 'white' : S.muted, border: `1px solid ${S.border}`, marginRight: '2px' }}>{k === '2027s' ? '2027' : periodLabel(k)}</span>
-                        ))}
+                        {dispKeys.map(k => {
+                          const isOpt = !!opts[k]
+                          const label = k === '2027s'
+                            ? (isOpt ? '2027 opt' : '2027')
+                            : isOpt
+                              ? periodLabel(k).replace(' opt', '') + ' opt'
+                              : periodLabel(k)
+                          return (
+                            <span key={k} style={{ display: 'inline-flex', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, background: k === '2026' && !isOpt ? S.green : S.creamDark, color: k === '2026' && !isOpt ? 'white' : S.muted, border: `1px solid ${S.border}`, marginRight: '2px' }}>{label}</span>
+                          )
+                        })}
                       </td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>
                         <button onClick={() => openEdit(p)} style={{ padding: '4px 8px', border: `1px solid ${S.border}`, borderRadius: '3px', background: 'transparent', color: S.muted, cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}>Edit</button>
@@ -457,18 +470,22 @@ function renderStats() {
                 const s27s = getSal(p, '2027s')
                 const s27r = p.salaries?.['2027r'] || 0
                 const hasDiff = s27r && s27r !== s27s
+                const has27sOnly = s27s > 0 && !s27r
                 const s28 = getSal(p, '2028')
                 const s29 = getSal(p, '2029')
                 const s30 = getSal(p, '2030')
+                const opts = p.options || {}
                 return (
                   <tr key={p.id}>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>{p.name}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{p.club || '—'}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>{getPosBadge(p.position)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s26 ? 600 : 400, color: s26 ? S.green : S.muted }}>{fmt(s26)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27s ? 600 : 400, color: s27s ? S.sprint : S.muted, background: '#fdf7f4' }}>{fmt(s27s)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: hasDiff ? 600 : 400, color: hasDiff ? S.greenMid : S.muted, fontStyle: hasDiff ? 'normal' : 'italic' }}>{hasDiff ? fmt(s27r) : s27s ? 'same as Sprint' : '—'}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s28 ? 600 : 400, color: s28 ? S.green : S.muted }}>{fmt(s28)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s26 ? 600 : 400, color: s26 ? (opts['2026'] ? S.muted : S.green) : S.muted, fontStyle: opts['2026'] ? 'italic' : 'normal' }}>{fmt(s26)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27s ? 600 : 400, color: s27s ? S.sprint : S.muted, background: '#fdf7f4', fontStyle: opts['2027s'] ? 'italic' : 'normal' }}>{fmt(s27s)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>
+                      {hasDiff ? <span style={{ fontWeight: 600, color: S.greenMid, fontStyle: 'normal' }}>{fmt(s27r)}</span> : has27sOnly && s28 ? 'same as Sprint' : '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s28 ? 600 : 400, color: s28 ? (opts['2028'] ? S.muted : S.green) : S.muted, fontStyle: opts['2028'] ? 'italic' : 'normal' }}>{fmt(s28)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{fmt(s29)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{fmt(s30)}</td>
                   </tr>
@@ -487,8 +504,17 @@ function renderStats() {
           style={{ padding: '8px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '13px', color: S.text }} />
       </div>
     )
+    const sel = (id: string, label: string, options: string[]) => (
+      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '5px', marginBottom: '12px' }}>
+        <label style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted }}>{label}</label>
+        <select value={form[id] || options[0]} onChange={e => setForm((f: any) => ({ ...f, [id]: e.target.value }))}
+          style={{ padding: '8px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '13px', color: S.text }}>
+          {options.map(o => <option key={o}>{o}</option>)}
+        </select>
+      </div>
+    )
     const salRow = (k: string, label: string, sublabel = '', isSprint = false) => (
-      <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: '8px', alignItems: 'center', marginBottom: '7px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 60px', gap: '8px', alignItems: 'center', marginBottom: '7px' }}>
         <div>
           <div style={{ fontSize: '11px', fontWeight: 600, color: isSprint ? S.sprint : S.muted }}>{label}</div>
           {sublabel && <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic' }}>{sublabel}</div>}
@@ -497,15 +523,10 @@ function renderStats() {
           style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }} />
         <input placeholder="Monthly $" value={form[`mon_${k}`] || ''} onChange={e => setForm((f: any) => ({ ...f, [`mon_${k}`]: fmtInput(e.target.value) }))}
           style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }} />
-      </div>
-    )
-    const sel = (id: string, label: string, options: string[]) => (
-      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '5px', marginBottom: '12px' }}>
-        <label style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted }}>{label}</label>
-        <select value={form[id] || options[0]} onChange={e => setForm((f: any) => ({ ...f, [id]: e.target.value }))}
-          style={{ padding: '8px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '13px', color: S.text }}>
-          {options.map(o => <option key={o}>{o}</option>)}
-        </select>
+        <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '2px' }}>
+          <label style={{ fontSize: '9px', color: S.muted }}>Opt?</label>
+          <input type="checkbox" checked={!!form[`opt_${k}`]} onChange={e => setForm((f: any) => ({ ...f, [`opt_${k}`]: e.target.checked }))} />
+        </div>
       </div>
     )
     return (
@@ -533,16 +554,18 @@ function renderStats() {
           )}
           {activeTab === 'salary' && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: '8px', marginBottom: '6px' }}>
-                <span /><span style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, textAlign: 'center' as const }}>Annual</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 60px', gap: '8px', marginBottom: '6px' }}>
+                <span />
+                <span style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, textAlign: 'center' as const }}>Annual</span>
                 <span style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, textAlign: 'center' as const }}>Monthly</span>
+                <span style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, textAlign: 'center' as const }}>Opt?</span>
               </div>
               {salRow('2026', '2026')}
               <div style={{ background: '#fdf7f4', border: '1px solid #e8c4aa', borderRadius: '4px', padding: '12px', margin: '8px 0' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.sprint, marginBottom: '10px' }}>2027 — Split Season</div>
                 {salRow('2027s', 'Sprint', 'Jan 1 – Jun 30', true)}
-                {salRow('2027r', 'Regular', 'Jul 1 – Dec 31')}
-                <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic', marginTop: '6px' }}>If salary is the same all year, only fill in Sprint and leave Regular blank.</div>
+                {salRow('2027r', 'Regular', 'Jul 1 – Dec 31 (blank = not applicable)')}
+                <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic', marginTop: '6px' }}>Check "Opt?" if this period is an option year. Leave Regular blank if not applicable.</div>
               </div>
               {salRow('2028', '2028')}
               <div style={{ borderTop: `1px solid ${S.border}`, margin: '8px 0 6px', paddingTop: '6px', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted }}>Option years</div>
@@ -597,7 +620,7 @@ function renderStats() {
             <button key={p} onClick={() => setActivePos(p)} style={{ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', padding: '8px 10px', border: 'none', background: activePos === p ? 'rgba(255,255,255,0.12)' : 'transparent', color: activePos === p ? 'white' : 'rgba(255,255,255,0.6)', fontSize: '12px', fontWeight: 500, borderRadius: '4px', cursor: 'pointer', textAlign: 'left' as const }}>{label}</button>
           ))}
         </div>
-        <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
+        <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <button onClick={() => setShowUploadModal(true)} style={{ width: '100%', padding: '9px 12px', background: S.gold, color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, cursor: 'pointer' }}>Upload PDF</button>
         </div>
       </div>
