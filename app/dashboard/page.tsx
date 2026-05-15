@@ -145,7 +145,7 @@ export default function Dashboard() {
     setShowPlayerModal(true)
   }
 
-  async function savePlayer() {
+async function savePlayer() {
     if (!form.name?.trim()) return showToast('Player name required', true)
     const salaries: Salaries = {}
     const monthlies: Salaries = {}
@@ -171,8 +171,7 @@ export default function Dashboard() {
       if (error) return showToast(error.message, true)
       showToast('Player updated')
     } else {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase.from('players').insert({ ...payload, user_id: user!.id })
+      const { error } = await supabase.from('players').insert({ ...payload, user_id: '00000000-0000-0000-0000-000000000000' })
       if (error) return showToast(error.message, true)
       showToast('Player added')
     }
@@ -226,9 +225,8 @@ export default function Dashboard() {
           setParseStatus(`Updated: ${parsed.name} ✓`)
           showToast(`Updated: ${parsed.name}`)
         } else {
-          const { data: { user } } = await supabase.auth.getUser()
           const { error } = await supabase.from('players').insert({
-            user_id: user!.id,
+            user_id: '00000000-0000-0000-0000-000000000000',
             name: parsed.name, club: parsed.club || '',
             position: parsed.position || 'GK',
             contract_type: parsed.contractType || 'Guaranteed',
