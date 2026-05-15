@@ -313,7 +313,7 @@ export default function Dashboard() {
                   const s = getSal(p, period)
                   const hasSplit = p.salaries?.['2027r'] && p.salaries['2027r'] !== p.salaries['2027s']
                   const allKeys = Object.keys(p.salaries || {}).filter(k => (p.salaries || {})[k] > 0)
-                  const dispKeys = [...new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))]
+                  const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k)))
                   return (
                     <tr key={p.id}>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>
