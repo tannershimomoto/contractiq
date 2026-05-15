@@ -482,7 +482,7 @@ export default function Dashboard() {
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s26 ? 600 : 400, color: s26 ? (opts['2026'] ? S.muted : S.green) : S.muted, fontStyle: opts['2026'] ? 'italic' : 'normal' }}>{fmt(s26)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27s ? 600 : 400, color: s27s ? S.sprint : S.muted, background: '#fdf7f4', fontStyle: opts['2027s'] ? 'italic' : 'normal' }}>{fmt(s27s)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>
-                      {hasDiff ? <span style={{ fontWeight: 600, color: S.greenMid, fontStyle: 'normal' }}>{fmt(s27r)}</span> : has27sOnly && s28 ? 'same as Sprint' : '—'}
+                      {hasDiff ? <span style={{ fontWeight: 600, color: opts['2027r'] ? S.muted : S.greenMid, fontStyle: opts['2027r'] ? 'italic' : 'normal' }}>{fmt(s27r)}</span> : has27sOnly && s28 ? 'same as Sprint' : '—'}
                     </td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s28 ? 600 : 400, color: s28 ? (opts['2028'] ? S.muted : S.green) : S.muted, fontStyle: opts['2028'] ? 'italic' : 'normal' }}>{fmt(s28)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{fmt(s29)}</td>
