@@ -323,7 +323,6 @@ export default function Dashboard() {
                     <tr key={p.id}>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>
                         {p.name}
-                        {hasSplit && <span style={{ marginLeft: '6px', background: '#f5e8e0', color: S.sprint, border: `1px solid #e8c4aa`, borderRadius: '2px', fontSize: '9px', padding: '1px 5px', fontWeight: 600 }}>Split 27</span>}
                       </td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{p.club || '—'}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>{getPosBadge(p.position)}</td>
