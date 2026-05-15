@@ -68,11 +68,6 @@ function getPosBadge(pos: string) {
     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', background: c.bg, color: c.color }}>{pos || '—'}</span>
   )
 }
-  const c = colors[pos] || colors.GK
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', background: c.bg, color: c.color }}>{pos || '—'}</span>
-  )
-}
 const S = {
   green: '#1e3a2f', greenMid: '#2d5240', greenLight: '#4a7c62',
   cream: '#f5f2ec', creamDark: '#ede9e0', gold: '#b8962e',
@@ -156,7 +151,7 @@ export default function Dashboard() {
     setShowPlayerModal(true)
   }
 
-async function savePlayer() {
+  async function savePlayer() {
     if (!form.name?.trim()) return showToast('Player name required', true)
     const salaries: Salaries = {}
     const monthlies: Salaries = {}
@@ -265,7 +260,8 @@ async function savePlayer() {
       }
     }
     reader.readAsDataURL(file)
-  }function renderStats() {
+  }
+function renderStats() {
     const f = getFiltered()
     const total = f.reduce((s, p) => s + getSal(p, period), 0)
     const avg = f.length ? Math.round(total / f.length) : 0
@@ -317,7 +313,7 @@ async function savePlayer() {
                   const hasSplit = p.salaries?.['2027r'] && p.salaries['2027r'] !== p.salaries['2027s']
                   const allKeys = Object.keys(p.salaries || {}).filter(k => (p.salaries || {})[k] > 0)
                   const keyOrder = ['2026','2027s','2027r','2028','2029','2030']
-const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))).sort((a,b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
+                  const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))).sort((a,b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
                   return (
                     <tr key={p.id}>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>
@@ -376,7 +372,7 @@ const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k
     const sals = rows.map(r => r.salary).filter(Boolean)
     const avg = sals.length ? Math.round(sals.reduce((s, v) => s + v, 0) / sals.length) : 0
     const depthLabel = ['Starter', '2nd string', '3rd string', '4th string'][parseInt(compDepth) - 1]
-    const posLabel: Record<string, string> = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' }
+    const posLabel: Record<string, string> = { GK: 'Goalkeeper', LB: 'Left Back', RB: 'Right Back', CB: 'Center Back', CDM: 'Def. Mid', CM: 'Midfielder', CAM: 'Att. Mid', F: 'Forward', LW: 'Left Wing', RW: 'Right Wing' }
     const pctNum = mySal && avg ? ((mySal - avg) / avg * 100) : null
     const pct = pctNum !== null ? pctNum.toFixed(1) + '%' : '—'
     const isSplit = compYear === '2027s' || compYear === '2027r'
@@ -398,7 +394,7 @@ const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k
         </div>
         <div style={{ background: 'white', border: `1px solid ${S.border}`, borderRadius: '4px', overflow: 'hidden' }}>
           <div style={{ padding: '0.625rem 1rem', fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' as const, fontWeight: 600, color: 'white', background: S.green }}>
-            {posLabel[pos]} {depthLabel}s — {periodLabel(compYear)} · {rows.length} clubs
+            {posLabel[pos] || pos} {depthLabel}s — {periodLabel(compYear)} · {rows.length} clubs
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '12.5px' }}>
             <thead>
@@ -527,8 +523,8 @@ const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>{inp('name', 'Full name *', 'text', 'e.g. Elías Báez')}</div>
-                <div>{inp('club', 'Club', 'text', 'e.g. CF Montréal')}</div>
-                <div>{sel('position', 'Position', ['GK', 'LB', 'RB', 'CB', 'CDM', 'CM', 'CAM', 'F', 'LW', 'RW'])}
+                <div>{inp('club', 'Club', 'text', 'e.g. Atlanta United')}</div>
+                <div>{sel('position', 'Position', ['GK', 'LB', 'RB', 'CB', 'CDM', 'CM', 'CAM', 'F', 'LW', 'RW'])}</div>
                 <div>{inp('nationality', 'Nationality', 'text', 'e.g. Colombian')}</div>
                 <div>{inp('dob', 'Date of birth', 'date')}</div>
                 <div>{inp('notes', 'Notes', 'text', 'e.g. our client...')}</div>
@@ -584,7 +580,6 @@ const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k
   return (
     <div style={{ display: 'flex', height: '100vh', background: S.cream }}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;500;600&display=swap" rel="stylesheet" />
-      <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" />
 
       {/* SIDEBAR */}
       <div style={{ width: '220px', minWidth: '220px', background: S.green, display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' }}>
@@ -621,18 +616,18 @@ const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k
             {getClubs().map(c => <option key={c}>{c}</option>)}
           </select>
           <select value={activePos} onChange={e => setActivePos(e.target.value)} style={{ padding: '7px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '12px', color: S.text }}>
-  <option value="all">All positions</option>
-  <option value="GK">GK</option>
-  <option value="LB">LB</option>
-  <option value="RB">RB</option>
-  <option value="CB">CB</option>
-  <option value="CDM">CDM</option>
-  <option value="CM">CM</option>
-  <option value="CAM">CAM</option>
-  <option value="F">F</option>
-  <option value="LW">LW</option>
-  <option value="RW">RW</option>
-</select>
+            <option value="all">All positions</option>
+            <option value="GK">GK</option>
+            <option value="LB">LB</option>
+            <option value="RB">RB</option>
+            <option value="CB">CB</option>
+            <option value="CDM">CDM</option>
+            <option value="CM">CM</option>
+            <option value="CAM">CAM</option>
+            <option value="F">F</option>
+            <option value="LW">LW</option>
+            <option value="RW">RW</option>
+          </select>
           <select value={period} onChange={e => setPeriod(e.target.value)} style={{ padding: '7px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '12px', color: S.text }}>
             <option value="2026">2026</option>
             <option value="2027s">2027 Sprint (Jan–Jun)</option>
@@ -658,7 +653,7 @@ const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k
                     <p style={{ fontSize: '12px', color: S.muted, marginBottom: '1rem' }}>Select your player and depth tier to compare against the same tier leaguewide</p>
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const }}>
                       {[
-                        { label: 'Your player', el: <select value={compPlayer} onChange={e => setCompPlayer(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="">— select player —</option>{players.map(p => <option key={p.id} value={p.id}>{p.name} ({p.position}{p.club ? ' · ' + p.club : ''})</option>)}</select> },
+                        { label: 'Your player', el: <select value={compPlayer} onChange={e => setCompPlayer(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="">— select player —</option>{players.filter(p => activePos === 'all' || p.position === activePos).map(p => <option key={p.id} value={p.id}>{p.name} ({p.position}{p.club ? ' · ' + p.club : ''})</option>)}</select> },
                         { label: 'Depth tier', el: <select value={compDepth} onChange={e => setCompDepth(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="1">Starter</option><option value="2">2nd string</option><option value="3">3rd string</option><option value="4">4th string</option></select> },
                         { label: 'Period', el: <select value={compYear} onChange={e => setCompYear(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="2026">2026</option><option value="2027s">2027 Sprint</option><option value="2027r">2027 Regular</option><option value="2028">2028</option><option value="2029">2029 opt</option><option value="2030">2030 opt</option></select> },
                       ].map((c, i) => (
