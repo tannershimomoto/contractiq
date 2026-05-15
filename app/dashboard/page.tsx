@@ -53,10 +53,21 @@ function periodLabel(k: string) {
 function getPosBadge(pos: string) {
   const colors: Record<string, { bg: string; color: string }> = {
     GK: { bg: '#e6f0eb', color: '#1e3a2f' },
-    DEF: { bg: '#eaf0e6', color: '#27500A' },
-    MID: { bg: '#f5f0e0', color: '#5a3a00' },
-    FWD: { bg: '#f5e8e6', color: '#6b2020' },
+    LB: { bg: '#eaf0e6', color: '#27500A' },
+    RB: { bg: '#eaf0e6', color: '#27500A' },
+    CB: { bg: '#eaf0e6', color: '#27500A' },
+    CDM: { bg: '#f5f0e0', color: '#5a3a00' },
+    CM: { bg: '#f5f0e0', color: '#5a3a00' },
+    CAM: { bg: '#f5f0e0', color: '#5a3a00' },
+    F: { bg: '#f5e8e6', color: '#6b2020' },
+    LW: { bg: '#f5e8e6', color: '#6b2020' },
+    RW: { bg: '#f5e8e6', color: '#6b2020' },
   }
+  const c = colors[pos] || colors.GK
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', background: c.bg, color: c.color }}>{pos || '—'}</span>
+  )
+}
   const c = colors[pos] || colors.GK
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', background: c.bg, color: c.color }}>{pos || '—'}</span>
@@ -305,7 +316,8 @@ async function savePlayer() {
                   const s = getSal(p, period)
                   const hasSplit = p.salaries?.['2027r'] && p.salaries['2027r'] !== p.salaries['2027s']
                   const allKeys = Object.keys(p.salaries || {}).filter(k => (p.salaries || {})[k] > 0)
-                  const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k)))
+                  const keyOrder = ['2026','2027s','2027r','2028','2029','2030']
+const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))).sort((a,b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
                   return (
                     <tr key={p.id}>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>
@@ -516,7 +528,7 @@ async function savePlayer() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>{inp('name', 'Full name *', 'text', 'e.g. Elías Báez')}</div>
                 <div>{inp('club', 'Club', 'text', 'e.g. CF Montréal')}</div>
-                <div>{sel('position', 'Position', ['GK', 'DEF', 'MID', 'FWD'])}</div>
+                <div>{sel('position', 'Position', ['GK', 'LB', 'RB', 'CB', 'CDM', 'CM', 'CAM', 'F', 'LW', 'RW'])}
                 <div>{inp('nationality', 'Nationality', 'text', 'e.g. Colombian')}</div>
                 <div>{inp('dob', 'Date of birth', 'date')}</div>
                 <div>{inp('notes', 'Notes', 'text', 'e.g. our client...')}</div>
@@ -586,7 +598,7 @@ async function savePlayer() {
             <button key={v} onClick={() => setView(v)} style={{ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', padding: '8px 10px', border: 'none', background: view === v ? 'rgba(255,255,255,0.12)' : 'transparent', color: view === v ? 'white' : 'rgba(255,255,255,0.6)', fontSize: '12px', fontWeight: 500, borderRadius: '4px', cursor: 'pointer', textAlign: 'left' as const }}>{label}</button>
           ))}
           <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.3)', padding: '0.75rem 0.5rem 0.4rem', fontWeight: 600, marginTop: '0.5rem' }}>Position</div>
-          {[['all', 'All positions'], ['GK', 'Goalkeepers'], ['DEF', 'Defenders'], ['MID', 'Midfielders'], ['FWD', 'Forwards']].map(([p, label]) => (
+          {[['all', 'All positions'], ['GK', 'Goalkeepers'], ['LB', 'Left backs'], ['RB', 'Right backs'], ['CB', 'Center backs'], ['CDM', 'Def. midfielders'], ['CM', 'Midfielders'], ['CAM', 'Att. midfielders'], ['F', 'Forwards'], ['LW', 'Left wingers'], ['RW', 'Right wingers']].map(([p, label]) => (
             <button key={p} onClick={() => setActivePos(p)} style={{ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', padding: '8px 10px', border: 'none', background: activePos === p ? 'rgba(255,255,255,0.12)' : 'transparent', color: activePos === p ? 'white' : 'rgba(255,255,255,0.6)', fontSize: '12px', fontWeight: 500, borderRadius: '4px', cursor: 'pointer', textAlign: 'left' as const }}>{label}</button>
           ))}
         </div>
@@ -608,6 +620,19 @@ async function savePlayer() {
             <option value="">All clubs</option>
             {getClubs().map(c => <option key={c}>{c}</option>)}
           </select>
+          <select value={activePos} onChange={e => setActivePos(e.target.value)} style={{ padding: '7px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '12px', color: S.text }}>
+  <option value="all">All positions</option>
+  <option value="GK">GK</option>
+  <option value="LB">LB</option>
+  <option value="RB">RB</option>
+  <option value="CB">CB</option>
+  <option value="CDM">CDM</option>
+  <option value="CM">CM</option>
+  <option value="CAM">CAM</option>
+  <option value="F">F</option>
+  <option value="LW">LW</option>
+  <option value="RW">RW</option>
+</select>
           <select value={period} onChange={e => setPeriod(e.target.value)} style={{ padding: '7px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '12px', color: S.text }}>
             <option value="2026">2026</option>
             <option value="2027s">2027 Sprint (Jan–Jun)</option>
