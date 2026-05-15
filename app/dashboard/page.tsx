@@ -120,7 +120,7 @@ export default function Dashboard() {
   }
 
   function getClubs() {
-    return [...new Set(players.map(p => p.club).filter(Boolean))].sort()
+    return Array.from(new Set(players.map(p => p.club).filter(Boolean))).sort()
   }
 
   function openAdd() {
