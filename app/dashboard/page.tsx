@@ -341,7 +341,7 @@ function renderStats() {
                   const sDisplay = getSalDisplay(p, period)
                   const allKeys = Object.keys(p.salaries || {}).filter(k => !k.endsWith('_label') && (p.salaries || {})[k] > 0)
                   const labelKeys = Object.keys(p.salaries || {}).filter(k => k.endsWith('_label')).map(k => k.replace('_label', ''))
-                  const allPeriods = [...new Set([...allKeys, ...labelKeys])]
+                  const allPeriods = Array.from(new Set([...allKeys, ...labelKeys]))
                   const keyOrder = ['2026', '2027s', '2027r', '2028', '2029', '2030']
                   const dispKeys = Array.from(new Set(allPeriods.map(k => k === '2027r' ? '2027s' : k))).sort((a, b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
                   const opts = p.options || {}
