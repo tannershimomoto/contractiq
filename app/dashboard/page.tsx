@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
 
-type Salaries = Record<string, number>
+type Salaries = Record<string, any>
 type Options = Record<string, boolean>
 type Player = {
   id: string
@@ -26,25 +25,45 @@ type Player = {
   options: Options
 }
 
-function fmt(n: number | undefined) {
-  if (!n) return '—'
+function fmt(n: any) {
+  if (!n && n !== 0) return '—'
+  if (typeof n === 'string') return n
   return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
+
+function fmtSal(salaries: Salaries, k: string): string {
+  const label = salaries[k + '_label']
+  if (label) return label
+  if (salaries[k]) return fmt(salaries[k])
+  return '—'
+}
+
 function parseSal(s: string) {
   if (!s) return 0
+  if (/[a-zA-Z]/.test(s)) return 0
   return parseInt(s.replace(/[^0-9]/g, '') || '0')
 }
+
 function fmtInput(s: string) {
+  if (/[a-zA-Z]/.test(s)) return s
   const v = s.replace(/[^0-9]/g, '')
   if (!v) return ''
   return '$' + Number(v).toLocaleString('en-US')
 }
+
 function getSal(p: Player, period: string): number {
   if (!p.salaries) return 0
   if (period === '2027s') return p.salaries['2027s'] || 0
   if (period === '2027r') return p.salaries['2027r'] || p.salaries['2027s'] || 0
   return p.salaries[period] || 0
 }
+
+function getSalDisplay(p: Player, period: string): string {
+  if (!p.salaries) return '—'
+  const k = period === '2027r' && !p.salaries['2027r'] ? '2027s' : period
+  return fmtSal(p.salaries, k)
+}
+
 function periodLabel(k: string) {
   const m: Record<string, string> = {
     '2026': '2026', '2027s': '2027 Sprint', '2027r': '2027 Regular',
@@ -52,6 +71,7 @@ function periodLabel(k: string) {
   }
   return m[k] || k
 }
+
 function getPosBadge(pos: string) {
   const colors: Record<string, { bg: string; color: string }> = {
     GK: { bg: '#e6f0eb', color: '#1e3a2f' },
@@ -70,6 +90,7 @@ function getPosBadge(pos: string) {
     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', background: c.bg, color: c.color }}>{pos || '—'}</span>
   )
 }
+
 const S = {
   green: '#1e3a2f', greenMid: '#2d5240', greenLight: '#4a7c62',
   cream: '#f5f2ec', creamDark: '#ede9e0', gold: '#b8962e',
@@ -145,8 +166,8 @@ export default function Dashboard() {
     const mon = p.monthlies || {}
     const opt = p.options || {}
     ;['2026', '2027s', '2027r', '2028', '2029', '2030'].forEach(k => {
-      f[`sal_${k}`] = sal[k] ? '$' + Number(sal[k]).toLocaleString('en-US') : ''
-      f[`mon_${k}`] = mon[k] ? '$' + Number(mon[k]).toLocaleString('en-US') : ''
+      f[`sal_${k}`] = sal[k + '_label'] || (sal[k] ? '$' + Number(sal[k]).toLocaleString('en-US') : '')
+      f[`mon_${k}`] = mon[k + '_label'] || (mon[k] ? '$' + Number(mon[k]).toLocaleString('en-US') : '')
       f[`opt_${k}`] = !!opt[k]
     })
     setForm(f)
@@ -160,10 +181,12 @@ export default function Dashboard() {
     const monthlies: Salaries = {}
     const options: Options = {}
     ;['2026', '2027s', '2027r', '2028', '2029', '2030'].forEach(k => {
-      const a = parseSal(form[`sal_${k}`] || '')
-      const m = parseSal(form[`mon_${k}`] || '')
-      if (a) salaries[k] = a
-      if (m) monthlies[k] = m
+      const aRaw = form[`sal_${k}`] || ''
+      const mRaw = form[`mon_${k}`] || ''
+      if (aRaw && /[a-zA-Z]/.test(aRaw)) salaries[k + '_label'] = aRaw
+      else { const a = parseSal(aRaw); if (a) salaries[k] = a }
+      if (mRaw && /[a-zA-Z]/.test(mRaw)) monthlies[k + '_label'] = mRaw
+      else { const m = parseSal(mRaw); if (m) monthlies[k] = m }
       if (form[`opt_${k}`]) options[k] = true
     })
     const payload = {
@@ -265,7 +288,8 @@ export default function Dashboard() {
       }
     }
     reader.readAsDataURL(file)
-  }function renderStats() {
+  }
+function renderStats() {
     const f = getFiltered()
     const total = f.reduce((s, p) => s + getSal(p, period), 0)
     const avg = f.length ? Math.round(total / f.length) : 0
@@ -314,20 +338,20 @@ export default function Dashboard() {
                   <tr><td colSpan={7} style={{ textAlign: 'center' as const, padding: '2.5rem', color: S.muted }}>No players yet — upload a PDF or add manually</td></tr>
                 ) : f.map(p => {
                   const s = getSal(p, period)
-                  const hasSplit = p.salaries?.['2027r'] && p.salaries['2027r'] !== p.salaries['2027s']
-                  const allKeys = Object.keys(p.salaries || {}).filter(k => (p.salaries || {})[k] > 0)
+                  const sDisplay = getSalDisplay(p, period)
+                  const allKeys = Object.keys(p.salaries || {}).filter(k => !k.endsWith('_label') && (p.salaries || {})[k] > 0)
+                  const labelKeys = Object.keys(p.salaries || {}).filter(k => k.endsWith('_label')).map(k => k.replace('_label', ''))
+                  const allPeriods = [...new Set([...allKeys, ...labelKeys])]
                   const keyOrder = ['2026', '2027s', '2027r', '2028', '2029', '2030']
-                  const dispKeys = Array.from(new Set(allKeys.map(k => k === '2027r' ? '2027s' : k))).sort((a, b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
+                  const dispKeys = Array.from(new Set(allPeriods.map(k => k === '2027r' ? '2027s' : k))).sort((a, b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
                   const opts = p.options || {}
                   return (
                     <tr key={p.id}>
-                      <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>
-                        {p.name}
-                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>{p.name}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{p.club || '—'}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>{getPosBadge(p.position)}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontSize: '11px' }}>{p.contract_type || '—'}</td>
-                      <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600, color: isSplit ? S.sprint : S.green, background: isSplit ? '#fdf7f4' : '' }}>{fmt(s)}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600, color: isSplit ? S.sprint : S.green, background: isSplit ? '#fdf7f4' : '' }}>{sDisplay}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>
                         {dispKeys.map(k => {
                           const isOpt = !!opts[k]
@@ -394,13 +418,13 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '1rem' }}>
           {[
             { label: 'League rank', val: `#${myRank} of ${rows.length}`, color: myRank <= 3 ? S.gold : accent },
-            { label: `Salary · ${periodLabel(compYear)}`, val: fmt(mySal), color: accent },
+            { label: `Salary · ${periodLabel(compYear)}`, val: fmt(mySal) },
             { label: 'League avg', val: fmt(avg), color: accent },
             { label: 'vs avg', val: pct, color: pctNum === null ? S.muted : pctNum >= 0 ? S.green : '#c0392b' },
           ].map((s, i) => (
             <div key={i} style={{ background: 'white', border: `1px solid ${S.border}`, borderRadius: '4px', padding: '1rem 1.1rem', borderTop: `3px solid ${accent}` }}>
               <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' as const, color: S.muted, marginBottom: '6px', fontWeight: 600 }}>{s.label}</div>
-              <div style={{ fontSize: '26px', color: s.color }}>{s.val}</div>
+              <div style={{ fontSize: '26px', color: (s as any).color || accent }}>{s.val}</div>
             </div>
           ))}
         </div>
@@ -430,7 +454,7 @@ export default function Dashboard() {
                       {r.isMe && <span style={{ marginLeft: '6px', fontSize: '10px', background: S.gold, color: 'white', padding: '1px 5px', borderRadius: '2px', fontWeight: 600 }}>CLIENT</span>}
                     </td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{r.club}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600, color: accent }}>{fmt(r.salary)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600, color: accent }}>{getSalDisplay(r.player, compYear)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, width: '140px' }}>
                       <div style={{ height: '6px', background: S.creamDark, borderRadius: '2px' }}>
                         <div style={{ height: '6px', background: r.isMe ? S.gold : S.greenLight, width: `${bar}%`, borderRadius: '2px' }} />
@@ -465,28 +489,35 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {f.map(p => {
-                const s26 = getSal(p, '2026')
-                const s27s = getSal(p, '2027s')
+                const s26 = fmtSal(p.salaries, '2026')
+                const s27s = fmtSal(p.salaries, '2027s')
+                const s27sNum = getSal(p, '2027s')
                 const s27r = p.salaries?.['2027r'] || 0
-                const hasDiff = s27r && s27r !== s27s
-                const has27sOnly = s27s > 0 && !s27r
+                const s27rLabel = fmtSal(p.salaries, '2027r')
+                const hasDiff = s27r && s27r !== p.salaries?.['2027s']
+                const has27sOnly = s27sNum > 0 && !s27r
                 const s28 = getSal(p, '2028')
-                const s29 = getSal(p, '2029')
-                const s30 = getSal(p, '2030')
+                const s28Display = fmtSal(p.salaries, '2028')
+                const s29Display = fmtSal(p.salaries, '2029')
+                const s30Display = fmtSal(p.salaries, '2030')
                 const opts = p.options || {}
                 return (
                   <tr key={p.id}>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>{p.name}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{p.club || '—'}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>{getPosBadge(p.position)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s26 ? 600 : 400, color: s26 ? (opts['2026'] ? S.muted : S.green) : S.muted, fontStyle: opts['2026'] ? 'italic' : 'normal' }}>{fmt(s26)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27s ? 600 : 400, color: s27s ? S.sprint : S.muted, background: '#fdf7f4', fontStyle: opts['2027s'] ? 'italic' : 'normal' }}>{fmt(s27s)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s26 !== '—' ? 600 : 400, color: s26 !== '—' ? (opts['2026'] ? S.muted : S.green) : S.muted, fontStyle: opts['2026'] ? 'italic' : 'normal' }}>{s26}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27s !== '—' ? 600 : 400, color: s27s !== '—' ? S.sprint : S.muted, background: '#fdf7f4', fontStyle: opts['2027s'] ? 'italic' : 'normal' }}>{s27s}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>
-                      {hasDiff ? <span style={{ fontWeight: 600, color: opts['2027r'] ? S.muted : S.greenMid, fontStyle: opts['2027r'] ? 'italic' : 'normal' }}>{fmt(s27r)}</span> : has27sOnly && s28 ? 'same as Sprint' : '—'}
+                      {hasDiff
+                        ? <span style={{ fontWeight: 600, color: opts['2027r'] ? S.muted : S.greenMid, fontStyle: opts['2027r'] ? 'italic' : 'normal' }}>{s27rLabel}</span>
+                        : has27sOnly && s28
+                          ? 'same as Sprint'
+                          : '—'}
                     </td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s28 ? 600 : 400, color: s28 ? (opts['2028'] ? S.muted : S.green) : S.muted, fontStyle: opts['2028'] ? 'italic' : 'normal' }}>{fmt(s28)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{fmt(s29)}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{fmt(s30)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s28Display !== '—' ? 600 : 400, color: s28Display !== '—' ? (opts['2028'] ? S.muted : S.green) : S.muted, fontStyle: opts['2028'] ? 'italic' : 'normal' }}>{s28Display}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{s29Display}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{s30Display}</td>
                   </tr>
                 )
               })}
@@ -518,10 +549,18 @@ export default function Dashboard() {
           <div style={{ fontSize: '11px', fontWeight: 600, color: isSprint ? S.sprint : S.muted }}>{label}</div>
           {sublabel && <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic' }}>{sublabel}</div>}
         </div>
-        <input placeholder="Annual $" value={form[`sal_${k}`] || ''} onChange={e => setForm((f: any) => ({ ...f, [`sal_${k}`]: fmtInput(e.target.value) }))}
-          style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }} />
-        <input placeholder="Monthly $" value={form[`mon_${k}`] || ''} onChange={e => setForm((f: any) => ({ ...f, [`mon_${k}`]: fmtInput(e.target.value) }))}
-          style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }} />
+        <input
+          placeholder="Annual $ or e.g. Senior Min"
+          value={form[`sal_${k}`] || ''}
+          onChange={e => setForm((f: any) => ({ ...f, [`sal_${k}`]: fmtInput(e.target.value) }))}
+          style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }}
+        />
+        <input
+          placeholder="Monthly $"
+          value={form[`mon_${k}`] || ''}
+          onChange={e => setForm((f: any) => ({ ...f, [`mon_${k}`]: fmtInput(e.target.value) }))}
+          style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }}
+        />
         <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '2px' }}>
           <label style={{ fontSize: '9px', color: S.muted }}>Opt?</label>
           <input type="checkbox" checked={!!form[`opt_${k}`]} onChange={e => setForm((f: any) => ({ ...f, [`opt_${k}`]: e.target.checked }))} />
