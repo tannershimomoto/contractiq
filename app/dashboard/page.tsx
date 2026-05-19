@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 type Salaries = Record<string, any>
 type Options = Record<string, boolean>
+type TermDates = Record<string, { start: string; end: string }>
 type Player = {
   id: string
   name: string
@@ -23,6 +24,7 @@ type Player = {
   salaries: Salaries
   monthlies: Salaries
   options: Options
+  term_dates: TermDates
 }
 
 function fmt(n: any) {
@@ -60,14 +62,19 @@ function getSal(p: Player, period: string): number {
 
 function getSalDisplay(p: Player, period: string): string {
   if (!p.salaries) return '—'
-  const k = period === '2027r' && !p.salaries['2027r'] ? '2027s' : period
-  return fmtSal(p.salaries, k)
+  if (period === '2027r') {
+    if (p.salaries['2027r'] || p.salaries['2027r_label']) return fmtSal(p.salaries, '2027r')
+    if (p.salaries['2027s'] || p.salaries['2027s_label']) return 'same as Sprint'
+    return '—'
+  }
+  return fmtSal(p.salaries, period)
 }
 
 function periodLabel(k: string) {
   const m: Record<string, string> = {
     '2026': '2026', '2027s': '2027 Sprint', '2027r': '2027 Regular',
-    '2028': '2028', '2029': '2029 opt', '2030': '2030 opt'
+    '2028': '2028', '2029': '2029', '2030': '2030',
+    '2031': '2031', '2032': '2032', '2033': '2033',
   }
   return m[k] || k
 }
@@ -97,6 +104,8 @@ const S = {
   text: '#1a1a18', muted: '#5a6e63', border: '#c8d4cc', sprint: '#7a3a1e',
 }
 
+const ALL_PERIODS = ['2026', '2027s', '2027r', '2028', '2029', '2030', '2031', '2032', '2033']
+
 export default function Dashboard() {
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,6 +116,8 @@ export default function Dashboard() {
   const [period, setPeriod] = useState('2026')
   const [showPlayerModal, setShowPlayerModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [detailPlayer, setDetailPlayer] = useState<Player | null>(null)
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null)
   const [activeTab, setActiveTab] = useState('info')
   const [compPlayer, setCompPlayer] = useState('')
@@ -165,14 +176,22 @@ export default function Dashboard() {
     const sal = p.salaries || {}
     const mon = p.monthlies || {}
     const opt = p.options || {}
-    ;['2026', '2027s', '2027r', '2028', '2029', '2030'].forEach(k => {
+    const td = p.term_dates || {}
+    ALL_PERIODS.forEach(k => {
       f[`sal_${k}`] = sal[k + '_label'] || (sal[k] ? '$' + Number(sal[k]).toLocaleString('en-US') : '')
       f[`mon_${k}`] = mon[k + '_label'] || (mon[k] ? '$' + Number(mon[k]).toLocaleString('en-US') : '')
       f[`opt_${k}`] = !!opt[k]
+      f[`start_${k}`] = td[k]?.start || ''
+      f[`end_${k}`] = td[k]?.end || ''
     })
     setForm(f)
     setActiveTab('info')
     setShowPlayerModal(true)
+  }
+
+  function openDetail(p: Player) {
+    setDetailPlayer(p)
+    setShowDetailModal(true)
   }
 
   async function savePlayer() {
@@ -180,7 +199,8 @@ export default function Dashboard() {
     const salaries: Salaries = {}
     const monthlies: Salaries = {}
     const options: Options = {}
-    ;['2026', '2027s', '2027r', '2028', '2029', '2030'].forEach(k => {
+    const term_dates: TermDates = {}
+    ALL_PERIODS.forEach(k => {
       const aRaw = form[`sal_${k}`] || ''
       const mRaw = form[`mon_${k}`] || ''
       if (aRaw && /[a-zA-Z]/.test(aRaw)) salaries[k + '_label'] = aRaw
@@ -188,6 +208,9 @@ export default function Dashboard() {
       if (mRaw && /[a-zA-Z]/.test(mRaw)) monthlies[k + '_label'] = mRaw
       else { const m = parseSal(mRaw); if (m) monthlies[k] = m }
       if (form[`opt_${k}`]) options[k] = true
+      if (form[`start_${k}`] || form[`end_${k}`]) {
+        term_dates[k] = { start: form[`start_${k}`] || '', end: form[`end_${k}`] || '' }
+      }
     })
     const payload = {
       name: form.name.trim(), club: form.club?.trim() || '',
@@ -198,7 +221,7 @@ export default function Dashboard() {
       active_date: form.activeDate || '', guarantee_end: form.guaranteeEnd || '',
       opt1_end: form.opt1End || '', opt2_end: form.opt2End || '',
       contract_notes: form.contractNotes?.trim() || '',
-      salaries, monthlies, options,
+      salaries, monthlies, options, term_dates,
     }
     if (editingPlayer) {
       const { error } = await supabase.from('players').update(payload).eq('id', editingPlayer.id)
@@ -266,7 +289,7 @@ export default function Dashboard() {
             structure: parsed.structure || '',
             active_date: parsed.activeDate || '',
             guarantee_end: parsed.guaranteeEnd || '',
-            salaries, monthlies, options: {},
+            salaries, monthlies, options: {}, term_dates: {},
             nationality: '', dob: '', notes: '',
             opt1_end: '', opt2_end: '', contract_notes: '',
           })
@@ -288,8 +311,7 @@ export default function Dashboard() {
       }
     }
     reader.readAsDataURL(file)
-  }
-function renderStats() {
+  }function renderStats() {
     const f = getFiltered()
     const total = f.reduce((s, p) => s + getSal(p, period), 0)
     const avg = f.length ? Math.round(total / f.length) : 0
@@ -322,7 +344,7 @@ function renderStats() {
         <div style={{ background: 'white', border: `1px solid ${S.border}`, borderRadius: '4px', overflow: 'hidden' }}>
           <div style={{ padding: '0.875rem 1rem', borderBottom: `1px solid ${S.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, color: S.green }}>{f.length} player{f.length !== 1 ? 's' : ''}</span>
-            <span style={{ fontSize: '11px', color: S.muted }}>Sorted highest to lowest</span>
+            <span style={{ fontSize: '11px', color: S.muted }}>Click a player name to view full contract details</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '12.5px' }}>
@@ -342,12 +364,14 @@ function renderStats() {
                   const allKeys = Object.keys(p.salaries || {}).filter(k => !k.endsWith('_label') && (p.salaries || {})[k] > 0)
                   const labelKeys = Object.keys(p.salaries || {}).filter(k => k.endsWith('_label')).map(k => k.replace('_label', ''))
                   const allPeriods = Array.from(new Set([...allKeys, ...labelKeys]))
-                  const keyOrder = ['2026', '2027s', '2027r', '2028', '2029', '2030']
+                  const keyOrder = ALL_PERIODS
                   const dispKeys = Array.from(new Set(allPeriods.map(k => k === '2027r' ? '2027s' : k))).sort((a, b) => keyOrder.indexOf(a) - keyOrder.indexOf(b))
                   const opts = p.options || {}
                   return (
                     <tr key={p.id}>
-                      <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>{p.name}</td>
+                      <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600 }}>
+                        <button onClick={() => openDetail(p)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: S.green, fontWeight: 600, fontSize: '12.5px', textDecoration: 'underline', textDecorationColor: 'rgba(30,58,47,0.3)', fontFamily: 'inherit' }}>{p.name}</button>
+                      </td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{p.club || '—'}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>{getPosBadge(p.position)}</td>
                       <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontSize: '11px' }}>{p.contract_type || '—'}</td>
@@ -358,7 +382,7 @@ function renderStats() {
                           const label = k === '2027s'
                             ? (isOpt ? '2027 opt' : '2027')
                             : isOpt
-                              ? periodLabel(k).replace(' opt', '') + ' opt'
+                              ? periodLabel(k) + ' opt'
                               : periodLabel(k)
                           return (
                             <span key={k} style={{ display: 'inline-flex', padding: '2px 7px', borderRadius: '2px', fontSize: '10px', fontWeight: 600, background: k === '2026' && !isOpt ? S.green : S.creamDark, color: k === '2026' && !isOpt ? 'white' : S.muted, border: `1px solid ${S.border}`, marginRight: '2px' }}>{label}</span>
@@ -418,13 +442,13 @@ function renderStats() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '1rem' }}>
           {[
             { label: 'League rank', val: `#${myRank} of ${rows.length}`, color: myRank <= 3 ? S.gold : accent },
-            { label: `Salary · ${periodLabel(compYear)}`, val: fmt(mySal) },
+            { label: `Salary · ${periodLabel(compYear)}`, val: fmt(mySal), color: accent },
             { label: 'League avg', val: fmt(avg), color: accent },
             { label: 'vs avg', val: pct, color: pctNum === null ? S.muted : pctNum >= 0 ? S.green : '#c0392b' },
           ].map((s, i) => (
             <div key={i} style={{ background: 'white', border: `1px solid ${S.border}`, borderRadius: '4px', padding: '1rem 1.1rem', borderTop: `3px solid ${accent}` }}>
               <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' as const, color: S.muted, marginBottom: '6px', fontWeight: 600 }}>{s.label}</div>
-              <div style={{ fontSize: '26px', color: (s as any).color || accent }}>{s.val}</div>
+              <div style={{ fontSize: '26px', color: s.color }}>{s.val}</div>
             </div>
           ))}
         </div>
@@ -472,35 +496,30 @@ function renderStats() {
 
   function renderTimeline() {
     const f = getFiltered().sort((a, b) => getSal(b, '2026') - getSal(a, '2026'))
+    const extraYears = ['2028', '2029', '2030', '2031', '2032', '2033'].filter(yr =>
+      f.some(p => p.salaries?.[yr] || p.salaries?.[yr + '_label'])
+    )
     return (
       <div style={{ background: 'white', border: `1px solid ${S.border}`, borderRadius: '4px', overflow: 'hidden' }}>
         <div style={{ padding: '0.875rem 1rem', borderBottom: `1px solid ${S.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, color: S.green }}>Salary timeline 2026–2030</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, color: S.green }}>Salary timeline</span>
           <span style={{ fontSize: '11px', color: S.muted }}>Option years in italics · 2027 split by season</span>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '12.5px' }}>
             <thead>
               <tr>
-                {['Player', 'Club', 'Pos', '2026', '2027 Sprint Jan-Jun', '2027 Regular Jul-Dec', '2028', '2029 opt', '2030 opt'].map((h, i) => (
-                  <th key={i} style={{ padding: '8px 12px', textAlign: 'left' as const, fontSize: '9px', fontWeight: 600, color: i === 4 ? S.sprint : S.muted, letterSpacing: '1.5px', textTransform: 'uppercase' as const, borderBottom: `1px solid ${S.border}`, background: i === 4 ? '#f9f0eb' : S.cream }}>{h}</th>
+                {['Player', 'Club', 'Pos', '2026', '2027 Sprint Jan-Jun', '2027 Regular Jul-Dec', ...extraYears.map(y => y + (y >= '2029' ? ' opt' : ''))].map((h, i) => (
+                  <th key={i} style={{ padding: '8px 12px', textAlign: 'left' as const, fontSize: '9px', fontWeight: 600, color: i === 4 ? S.sprint : S.muted, letterSpacing: '1.5px', textTransform: 'uppercase' as const, borderBottom: `1px solid ${S.border}`, background: i === 4 ? '#f9f0eb' : S.cream, whiteSpace: 'nowrap' as const }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {f.map(p => {
-                const s26 = fmtSal(p.salaries, '2026')
-                const s27s = fmtSal(p.salaries, '2027s')
-                const s27sNum = getSal(p, '2027s')
-                const s27r = p.salaries?.['2027r'] || 0
-                const s27rLabel = fmtSal(p.salaries, '2027r')
-                const hasDiff = s27r && s27r !== p.salaries?.['2027s']
-                const has27sOnly = s27sNum > 0 && !s27r
-                const s28 = getSal(p, '2028')
-                const s28Display = fmtSal(p.salaries, '2028')
-                const s29Display = fmtSal(p.salaries, '2029')
-                const s30Display = fmtSal(p.salaries, '2030')
                 const opts = p.options || {}
+                const s26 = fmtSal(p.salaries || {}, '2026')
+                const s27s = fmtSal(p.salaries || {}, '2027s')
+                const s27rDisplay = getSalDisplay(p, '2027r')
                 return (
                   <tr key={p.id}>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 500 }}>{p.name}</td>
@@ -508,21 +527,95 @@ function renderStats() {
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>{getPosBadge(p.position)}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s26 !== '—' ? 600 : 400, color: s26 !== '—' ? (opts['2026'] ? S.muted : S.green) : S.muted, fontStyle: opts['2026'] ? 'italic' : 'normal' }}>{s26}</td>
                     <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27s !== '—' ? 600 : 400, color: s27s !== '—' ? S.sprint : S.muted, background: '#fdf7f4', fontStyle: opts['2027s'] ? 'italic' : 'normal' }}>{s27s}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>
-                      {hasDiff
-                        ? <span style={{ fontWeight: 600, color: opts['2027r'] ? S.muted : S.greenMid, fontStyle: opts['2027r'] ? 'italic' : 'normal' }}>{s27rLabel}</span>
-                        : has27sOnly && s28
-                          ? 'same as Sprint'
-                          : '—'}
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s28Display !== '—' ? 600 : 400, color: s28Display !== '—' ? (opts['2028'] ? S.muted : S.green) : S.muted, fontStyle: opts['2028'] ? 'italic' : 'normal' }}>{s28Display}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{s29Display}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontStyle: 'italic' }}>{s30Display}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: s27rDisplay !== '—' && s27rDisplay !== 'same as Sprint' ? 600 : 400, color: s27rDisplay === 'same as Sprint' ? S.muted : s27rDisplay !== '—' ? (opts['2027r'] ? S.muted : S.greenMid) : S.muted, fontStyle: s27rDisplay === 'same as Sprint' || opts['2027r'] ? 'italic' : 'normal' }}>{s27rDisplay}</td>
+                    {extraYears.map(yr => {
+                      const val = fmtSal(p.salaries || {}, yr)
+                      const isOpt = opts[yr] || yr >= '2029'
+                      return <td key={yr} style={{ padding: '10px 12px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: val !== '—' ? 600 : 400, color: val !== '—' ? (isOpt ? S.muted : S.green) : S.muted, fontStyle: isOpt ? 'italic' : 'normal', whiteSpace: 'nowrap' as const }}>{val}</td>
+                    })}
                   </tr>
                 )
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+    )
+  }
+
+  function renderDetailModal() {
+    if (!detailPlayer) return null
+    const p = detailPlayer
+    const opts = p.options || {}
+    const td = p.term_dates || {}
+    const sal = p.salaries || {}
+    const mon = p.monthlies || {}
+    const activePeriods = ALL_PERIODS.filter(k => sal[k] || sal[k + '_label'] || mon[k] || mon[k + '_label'])
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,20,15,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+        <div style={{ background: 'white', borderRadius: '4px', border: `1px solid ${S.border}`, width: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+            <div>
+              <div style={{ fontSize: '22px', color: S.green, fontWeight: 600 }}>{p.name}</div>
+              <div style={{ fontSize: '12px', color: S.muted, marginTop: '2px' }}>{p.club || '—'} · {p.position} · {p.contract_type}</div>
+              {p.structure && <div style={{ fontSize: '11px', color: S.muted, marginTop: '2px' }}>Structure: {p.structure}</div>}
+            </div>
+            <button onClick={() => setShowDetailModal(false)} style={{ padding: '4px 10px', border: `1px solid ${S.border}`, borderRadius: '3px', background: 'transparent', color: S.muted, cursor: 'pointer', fontSize: '12px' }}>Close</button>
+          </div>
+
+          {p.active_date && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '1rem', padding: '10px 12px', background: S.cream, borderRadius: '4px', fontSize: '12px' }}>
+              <div><span style={{ color: S.muted, fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, display: 'block' }}>Active date</span>{p.active_date}</div>
+              <div><span style={{ color: S.muted, fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, display: 'block' }}>Guarantee end</span>{p.guarantee_end || '—'}</div>
+            </div>
+          )}
+
+          <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${S.border}` }}>Salary by period</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '12.5px', marginBottom: '1rem' }}>
+            <thead>
+              <tr>
+                {['Period', 'Annual', 'Monthly', 'Type', 'Term dates'].map(h => (
+                  <th key={h} style={{ padding: '6px 10px', textAlign: 'left' as const, fontSize: '9px', fontWeight: 600, color: S.muted, letterSpacing: '1px', textTransform: 'uppercase' as const, borderBottom: `1px solid ${S.border}`, background: S.cream }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {activePeriods.map(k => {
+                const isOpt = !!opts[k]
+                const annual = fmtSal(sal, k)
+                const monthly = fmtSal(mon, k)
+                const termStart = td[k]?.start || ''
+                const termEnd = td[k]?.end || ''
+                const label = k === '2027s' ? '2027 Sprint (Jan–Jun)' : k === '2027r' ? '2027 Regular (Jul–Dec)' : periodLabel(k)
+                const isSprint = k === '2027s' || k === '2027r'
+                return (
+                  <tr key={k}>
+                    <td style={{ padding: '8px 10px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600, color: isSprint ? S.sprint : S.green }}>{label}</td>
+                    <td style={{ padding: '8px 10px', borderBottom: `1px solid rgba(200,212,204,0.4)`, fontWeight: 600 }}>{annual}</td>
+                    <td style={{ padding: '8px 10px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted }}>{monthly}</td>
+                    <td style={{ padding: '8px 10px', borderBottom: `1px solid rgba(200,212,204,0.4)` }}>
+                      <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '2px', background: isOpt ? '#f5f0e0' : '#e6f0eb', color: isOpt ? '#5a3a00' : S.green, fontWeight: 600 }}>{isOpt ? 'Option' : 'Guaranteed'}</span>
+                    </td>
+                    <td style={{ padding: '8px 10px', borderBottom: `1px solid rgba(200,212,204,0.4)`, color: S.muted, fontSize: '11px' }}>
+                      {termStart || termEnd ? `${termStart}${termStart && termEnd ? ' – ' : ''}${termEnd}` : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {p.contract_notes && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, marginBottom: '6px' }}>Notes</div>
+              <div style={{ fontSize: '12px', color: S.text, lineHeight: 1.6, padding: '10px 12px', background: S.cream, borderRadius: '4px' }}>{p.contract_notes}</div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.25rem', paddingTop: '1rem', borderTop: `1px solid ${S.border}` }}>
+            <button onClick={() => { setShowDetailModal(false); openEdit(p) }} style={{ padding: '8px 18px', borderRadius: '3px', fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, cursor: 'pointer', background: 'transparent', border: `1px solid ${S.border}`, color: S.text }}>Edit player</button>
+            <button onClick={() => setShowDetailModal(false)} style={{ padding: '8px 18px', borderRadius: '3px', fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase' as const, cursor: 'pointer', background: S.green, color: 'white', border: 'none' }}>Close</button>
+          </div>
         </div>
       </div>
     )
@@ -544,32 +637,52 @@ function renderStats() {
       </div>
     )
     const salRow = (k: string, label: string, sublabel = '', isSprint = false) => (
-      <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 60px', gap: '8px', alignItems: 'center', marginBottom: '7px' }}>
-        <div>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: isSprint ? S.sprint : S.muted }}>{label}</div>
-          {sublabel && <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic' }}>{sublabel}</div>}
+      <div style={{ marginBottom: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 60px', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: isSprint ? S.sprint : S.muted }}>{label}</div>
+            {sublabel && <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic' }}>{sublabel}</div>}
+          </div>
+          <input
+            placeholder="Annual $ or e.g. Senior Min"
+            value={form[`sal_${k}`] || ''}
+            onChange={e => setForm((f: any) => ({ ...f, [`sal_${k}`]: fmtInput(e.target.value) }))}
+            style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }}
+          />
+          <input
+            placeholder="Monthly $"
+            value={form[`mon_${k}`] || ''}
+            onChange={e => setForm((f: any) => ({ ...f, [`mon_${k}`]: fmtInput(e.target.value) }))}
+            style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '2px' }}>
+            <label style={{ fontSize: '9px', color: S.muted }}>Opt?</label>
+            <input type="checkbox" checked={!!form[`opt_${k}`]} onChange={e => setForm((f: any) => ({ ...f, [`opt_${k}`]: e.target.checked }))} />
+          </div>
         </div>
-        <input
-          placeholder="Annual $ or e.g. Senior Min"
-          value={form[`sal_${k}`] || ''}
-          onChange={e => setForm((f: any) => ({ ...f, [`sal_${k}`]: fmtInput(e.target.value) }))}
-          style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }}
-        />
-        <input
-          placeholder="Monthly $"
-          value={form[`mon_${k}`] || ''}
-          onChange={e => setForm((f: any) => ({ ...f, [`mon_${k}`]: fmtInput(e.target.value) }))}
-          style={{ padding: '7px 8px', border: `1px solid ${isSprint ? '#e8c4aa' : S.border}`, borderRadius: '3px', background: isSprint ? '#fdf7f4' : S.cream, fontSize: '12px', color: S.text }}
-        />
-        <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '2px' }}>
-          <label style={{ fontSize: '9px', color: S.muted }}>Opt?</label>
-          <input type="checkbox" checked={!!form[`opt_${k}`]} onChange={e => setForm((f: any) => ({ ...f, [`opt_${k}`]: e.target.checked }))} />
+        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 60px', gap: '8px', alignItems: 'center' }}>
+          <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic' }}>Term dates</div>
+          <input
+            type="date"
+            placeholder="Start date"
+            value={form[`start_${k}`] || ''}
+            onChange={e => setForm((f: any) => ({ ...f, [`start_${k}`]: e.target.value }))}
+            style={{ padding: '5px 8px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '11px', color: S.text }}
+          />
+          <input
+            type="date"
+            placeholder="End date"
+            value={form[`end_${k}`] || ''}
+            onChange={e => setForm((f: any) => ({ ...f, [`end_${k}`]: e.target.value }))}
+            style={{ padding: '5px 8px', border: `1px solid ${S.border}`, borderRadius: '3px', background: S.cream, fontSize: '11px', color: S.text }}
+          />
+          <span />
         </div>
       </div>
     )
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,20,15,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-        <div style={{ background: 'white', borderRadius: '4px', border: `1px solid ${S.border}`, width: '580px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+        <div style={{ background: 'white', borderRadius: '4px', border: `1px solid ${S.border}`, width: '620px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
           <div style={{ fontSize: '20px', color: S.green, marginBottom: '1.25rem', fontWeight: 500 }}>{editingPlayer ? 'Edit Player' : 'Add Player'}</div>
           <div style={{ display: 'flex', marginBottom: '1.25rem', border: `1px solid ${S.border}`, borderRadius: '3px', overflow: 'hidden' }}>
             {['info', 'salary', 'contract'].map((t, i) => (
@@ -592,7 +705,7 @@ function renderStats() {
           )}
           {activeTab === 'salary' && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 60px', gap: '8px', marginBottom: '6px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 60px', gap: '8px', marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${S.border}` }}>
                 <span />
                 <span style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, textAlign: 'center' as const }}>Annual</span>
                 <span style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted, textAlign: 'center' as const }}>Monthly</span>
@@ -603,12 +716,15 @@ function renderStats() {
                 <div style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.sprint, marginBottom: '10px' }}>2027 — Split Season</div>
                 {salRow('2027s', 'Sprint', 'Jan 1 – Jun 30', true)}
                 {salRow('2027r', 'Regular', 'Jul 1 – Dec 31 (blank = not applicable)')}
-                <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic', marginTop: '6px' }}>Check "Opt?" if this period is an option year. Leave Regular blank if not applicable.</div>
+                <div style={{ fontSize: '10px', color: S.muted, fontStyle: 'italic', marginTop: '4px' }}>Check "Opt?" if this period is an option year. Leave Regular blank if not applicable.</div>
               </div>
               {salRow('2028', '2028')}
-              <div style={{ borderTop: `1px solid ${S.border}`, margin: '8px 0 6px', paddingTop: '6px', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted }}>Option years</div>
+              <div style={{ borderTop: `1px solid ${S.border}`, margin: '10px 0 8px', paddingTop: '8px', fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted }}>Option / future years</div>
               {salRow('2029', '2029')}
               {salRow('2030', '2030')}
+              {salRow('2031', '2031')}
+              {salRow('2032', '2032')}
+              {salRow('2033', '2033')}
             </div>
           )}
           {activeTab === 'contract' && (
@@ -696,6 +812,9 @@ function renderStats() {
             <option value="2028">2028</option>
             <option value="2029">2029 (opt)</option>
             <option value="2030">2030 (opt)</option>
+            <option value="2031">2031 (opt)</option>
+            <option value="2032">2032 (opt)</option>
+            <option value="2033">2033 (opt)</option>
           </select>
           <button onClick={() => window.print()} style={{ padding: '7px 14px', border: `1px solid ${S.border}`, borderRadius: '3px', background: 'transparent', fontSize: '11px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase' as const, color: S.green, cursor: 'pointer' }}>Print</button>
           <button onClick={openAdd} style={{ padding: '7px 14px', border: 'none', borderRadius: '3px', background: S.green, fontSize: '11px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase' as const, color: 'white', cursor: 'pointer' }}>+ Add player</button>
@@ -716,7 +835,7 @@ function renderStats() {
                       {[
                         { label: 'Your player', el: <select value={compPlayer} onChange={e => setCompPlayer(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="">— select player —</option>{players.filter(p => activePos === 'all' || p.position === activePos).map(p => <option key={p.id} value={p.id}>{p.name} ({p.position}{p.club ? ' · ' + p.club : ''})</option>)}</select> },
                         { label: 'Depth tier', el: <select value={compDepth} onChange={e => setCompDepth(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="1">Starter</option><option value="2">2nd string</option><option value="3">3rd string</option><option value="4">4th string</option></select> },
-                        { label: 'Period', el: <select value={compYear} onChange={e => setCompYear(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="2026">2026</option><option value="2027s">2027 Sprint</option><option value="2027r">2027 Regular</option><option value="2028">2028</option><option value="2029">2029 opt</option><option value="2030">2030 opt</option></select> },
+                        { label: 'Period', el: <select value={compYear} onChange={e => setCompYear(e.target.value)} style={{ padding: '7px 12px', border: `1px solid ${S.border}`, borderRadius: '3px', fontSize: '12px', background: S.cream, color: S.text }}><option value="2026">2026</option><option value="2027s">2027 Sprint</option><option value="2027r">2027 Regular</option><option value="2028">2028</option><option value="2029">2029 opt</option><option value="2030">2030 opt</option><option value="2031">2031 opt</option><option value="2032">2032 opt</option><option value="2033">2033 opt</option></select> },
                       ].map((c, i) => (
                         <div key={i} style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
                           <label style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase' as const, fontWeight: 600, color: S.muted }}>{c.label}</label>
@@ -760,6 +879,7 @@ function renderStats() {
       )}
 
       {showPlayerModal && renderPlayerModal()}
+      {showDetailModal && renderDetailModal()}
 
       {toast && (
         <div style={{ position: 'fixed', bottom: '1.5rem', right: '1.5rem', background: toastError ? '#c0392b' : S.green, color: 'white', padding: '10px 18px', borderRadius: '4px', fontSize: '12px', fontWeight: 600, letterSpacing: '1px', zIndex: 200 }}>{toast}</div>
