@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',  // ✅ fixed model name
         max_tokens: 1200,
         messages: [{
           role: 'user',
@@ -24,11 +24,9 @@ export async function POST(req: NextRequest) {
             {
               type: 'text',
               text: `Extract contract salary data from this MLS MLSPA deal summary PDF.
-
 2027 IMPORTANT: In 2027 there is a Sprint Season (Jan 1 to Jun 30) and a Regular Season (Jul 1 to Dec 31). Some players have different salaries for each half; many have the same salary for the full calendar year.
 - If the contract shows ONE salary for all of 2027: put it under 2027s only. Do NOT create a 2027r key.
 - If the contract shows TWO different salaries for 2027: put the Sprint amount under 2027s and the Regular amount under 2027r.
-
 Return ONLY raw JSON, no markdown:
 {"name":"Player full name","club":"club or empty string","position":"GK or DEF or MID or FWD","contractType":"Guaranteed or Option or Loan","structure":"e.g. 2.9+1.0+1.0","activeDate":"YYYY-MM-DD","guaranteeEnd":"YYYY-MM-DD","salaries":{"2026":264706,"2027s":250000,"2028":250000,"2029":300000},"monthlies":{"2026":22058,"2027s":20833,"2028":20833}}
 Only include years and periods present in the document. Raw JSON only.`
@@ -39,10 +37,23 @@ Only include years and periods present in the document. Raw JSON only.`
     })
 
     const data = await response.json()
+
+    // ✅ Check for API-level errors (e.g. invalid model, bad auth)
+    if (!response.ok) {
+      console.error('Anthropic API error:', data)
+      return NextResponse.json({ error: data.error?.message || 'API error' }, { status: 500 })
+    }
+
     const text = data.content.map((b: any) => b.text || '').join('')
+
+    // ✅ Log raw text so you can debug if JSON.parse fails
+    console.log('Raw Claude response:', text)
+
     const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
     return NextResponse.json(parsed)
+
   } catch (err: any) {
+    console.error('Extract error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
